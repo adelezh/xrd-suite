@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xrd-suite"
+version = "0.1.0"
+description = "XRD integration, retained-curve analysis, and monitoring"
+requires-python = ">=3.12"
+
+[project.scripts]
+xrd-integration = "xrd_gui.gui:main"
+xrd-monitor = "xrd_monitor.launcher:main"
+
+[tool.setuptools.packages.find]
+include = ["xrd_suite*", "xrd_gui*", "xrd_monitor*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--import-mode=importlib"

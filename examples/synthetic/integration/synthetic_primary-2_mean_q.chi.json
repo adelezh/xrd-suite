@@ -1,0 +1,9 @@
+{
+  "source": "synthetic scan 2",
+  "unit": "q_A^-1",
+  "wavelength_m": 1e-10,
+  "synthetic": true,
+  "expected_center": 3.03,
+  "expected_fwhm": 0.12,
+  "expected_area": 80
+}

@@ -1,0 +1,168 @@
+{
+  "date": "2026-10-29",
+  "source_files": [
+    {
+      "source": "Integration_GUI/xrd_gui/estimators.py",
+      "sha256": "8968897a5d8ca0afbb1487d6330f6bcafe8471601484d19e3e39a78646bda004",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/files.py",
+      "sha256": "53839396e7e9d064d79c2332153c93c2157d6a3637e2366bd902dbc99890e5b1",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/gui.py",
+      "sha256": "332c02107844599fb705f19616b730353885697f60f97d0f6701f3be09db9c36",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/jobs.py",
+      "sha256": "3de659efff790d32fa7096e548c3fc9a7d4107529cbe274f5f62e1506d68de7c",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/naming.py",
+      "sha256": "07885ab0740b02fb321557de52a4a05a371790f3bee31f8d3baae5a10f63f022",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/presentation.py",
+      "sha256": "20d37f31c9ebf73b0aaedc1bc7884335db7ba4687f9be2cdfbf07e92ca05f008",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/processing.py",
+      "sha256": "aa1a6c3284bd364ea2bb06d20137f23c34606047a4abbe0aa100b24407b42bba",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/settings.py",
+      "sha256": "bf697076e95d2a071e1200ca7afe3c059ffe806a342512fdba87885fd24d6871",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/ui_jobs.py",
+      "sha256": "7799909453ff383a39c5ca8c7722fbd5b4330f21d5a678253b5aefe683e05299",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/ui_layout.py",
+      "sha256": "faab923272eaee84855462d5cc9bf102b5cf3abd680a10c361cf5d1d7c4dcb01",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/ui_methods.py",
+      "sha256": "1211b74f6488365f8825db364ed6429cda06bfb4f9d39cc658eb164116b9f253",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/ui_plots.py",
+      "sha256": "123e0d73291695556855065cb9461ff5b0f93086f0e410d51c6e0639db026954",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/widgets.py",
+      "sha256": "39581e5d1ebb1fe0abc096d5dc282f520b08be0d3f0de99def9dbf1af437d18e",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/__init__.py",
+      "sha256": "09fd8ff561f611b4ca3712c3ae3ec57e89c9b45ff7749f7ad9b77c681b0cfb53",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/xrd_gui/__main__.py",
+      "sha256": "259c695b11f9dee4d049b7f4b6affa288257b2dea70a2f971cf6b1d90342a64b",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/tests/test_estimators.py",
+      "sha256": "ce9785fd09e8e46132cc8ddb0f4e46117f5ec28bde01ce61615cbe7e778c4e30",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/tests/test_presentation.py",
+      "sha256": "010cb85d593e5a20181da035f1c014036e72c33953df70e1ed26a5017df03f5f",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/tests/test_workflow.py",
+      "sha256": "25110f720af50c76aaa3cd7f5b7e8f35d0269996eeac93b8582347f29fac764f",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/tests/conftest.py",
+      "sha256": "0674bb1826af4461b5418687deea49e09c25ecf3b63a4d7d3a1e2295cbac9048",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/README.md",
+      "sha256": "d1c625443c8a002303e2bd89eb63834c712684ede9bc68d54d5c9d3a14d74aac",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/ROBUST_METHODS.md",
+      "sha256": "a2bc75610d5aff9ae49449fa795e5bbca7161807701582f5004171018476d003",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/UI_REFINEMENT.md",
+      "sha256": "c908523e3e25cae3229ae977a10c89c2249d016a18008bf8a3e3c740b4034e9e",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/pixi.toml",
+      "sha256": "aa2648f0ba0c55d1053e8ecd94683bf73b06414e16e8f35c5858f12745fafe8a",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/pixi.lock",
+      "sha256": "a45c8f5f8e5cb4d60ba3c03ef0609a54dee7c6cf94835c6f873b079fa68ab6b2",
+      "unchanged": true
+    },
+    {
+      "source": "Integration_GUI/requirements.txt",
+      "sha256": "743e8e68cd1c2ad25e1bbd87d955154bf1c81fa321772f37986336cb195c3c99",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_calculated_phases.py",
+      "sha256": "2f74b8f5da28ffc295e4a8e8f15fa600dea3b7235a314a76975146ee06ba967f",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_calibration.py",
+      "sha256": "0302d317751f6a2fe7b71798427efc5b014274d12207dcf25c5428453c302fbd",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_detector_inspector.py",
+      "sha256": "cd13684a26c80d1a9f601e72ce35fe585ad9e44021001d13e10521006a9692c9",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_map_gui.py",
+      "sha256": "165683fe2b368cb0b2c875b49f663b61ccc456fb788bfe51454bd03d522ad9b0",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_peak_workflow.py",
+      "sha256": "7a51e8d2f6789e2acd9e42bf9d438d28eb60a3cb40fd4d17048b63976159bf94",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_ring_guide.py",
+      "sha256": "f041362975e92e6a9e7b780dc5bd70e4f4267ab47942a87f1f770efc9bb309d3",
+      "unchanged": true
+    },
+    {
+      "source": "xrd_inline_monitor/xrd_ui_layout.py",
+      "sha256": "d7d7dc0738613fb08dabbdf1bdabfbabf0f97d6ff53ccd95eb569fa8ac19e0dc",
+      "unchanged": true
+    }
+  ],
+  "integration_git_status_unchanged": true,
+  "monitor_source_inventory_unchanged": true,
+  "method": "SHA256 of selected source/tests/docs/manifests and read-only Git status; no experimental datasets hashed."
+}

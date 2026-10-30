@@ -1,0 +1,5 @@
+numpy
+matplotlib
+pyFAI==2026.9.0
+fabio>=2026.6
+# Optional external calibration GUI: pip install PyQt6

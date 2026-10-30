@@ -1,0 +1,15 @@
+calibration_md:
+  Detector: Detector
+  Detector_config:
+    max_shape:
+    - 128
+    - 128
+    pixel1: 0.0001
+    pixel2: 0.0001
+  Distance: 0.1
+  Poni1: 0.0064
+  Poni2: 0.0064
+  Rot1: 0.0
+  Rot2: 0.0
+  Rot3: 0.0
+  Wavelength: 1.0e-10

@@ -1,0 +1,28 @@
+[workspace]
+name = "xrd-suite"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64"]
+
+[tasks]
+integration = "python -m xrd_gui"
+monitor = "python -m xrd_monitor"
+test = "python -m pytest -q"
+smoke = "python -m tests.gui_smoke"
+example = "python -m xrd_suite.example"
+
+[dependencies]
+python = ">=3.12,<3.13"
+numpy = "==2.5.4"
+scipy = "==1.18.1"
+matplotlib = "==3.11.2"
+pyfai = "==2026.9.0"
+fabio = "==2025.10.0"
+pybaselines = ">=1.2,<2"
+pandas = ">=2.2,<4"
+tifffile = "*"
+tk = ">=8.6,<9"
+pytest = ">=9.1.1,<10"
+pymatgen = "*"
+pyyaml = ">=6,<7"
+openpyxl = ">=3.1,<4"

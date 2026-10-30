@@ -1,0 +1,29 @@
+name: suite-tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.11.2
+        with:
+          pixi-version: v0.67.1
+          locked: true
+      - name: Verify runner architecture
+        run: pixi run --locked python -c "import platform; print(platform.platform(), platform.machine())"
+      - name: Linux tests and GUI smoke
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a pixi run --locked test
+          xvfb-run -a pixi run --locked smoke
+      - name: Windows and Apple Silicon tests and GUI smoke
+        if: runner.os != 'Linux'
+        run: |
+          pixi run --locked test
+          pixi run --locked smoke

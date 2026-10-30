@@ -1,0 +1,16 @@
+[workspace]
+authors = ["Hui <hzhong@bnl.gov>"]
+channels = ["conda-forge"]
+name = "Integration_GUI"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.12,<3.13"
+matplotlib = ">=3.11.2,<4"
+numpy = "*"
+pyfai = "==2026.9.0"
+fabio = ">=2025.10.0,<2026"
+pytest = ">=9.1.1,<10"
