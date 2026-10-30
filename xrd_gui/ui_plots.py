@@ -9,7 +9,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from .widgets import Form, Tooltip
 from .presentation import UNIT_LABELS, short_source, curve_labels, map_display
 
-class PlotMixin:
+from .ui_filter import FilterOverlayMixin
+
+class PlotMixin(FilterOverlayMixin):
     def new_plot(self,parent,title):
         frame=ttk.Frame(parent,padding=6);head=ttk.Frame(frame);head.pack(fill='x',pady=(0,4))
         ttk.Label(head,text=title,font=('Segoe UI',10,'bold')).pack(side='left')
@@ -23,7 +25,8 @@ class PlotMixin:
         self.map_low=tk.StringVar(value='1');self.map_high=tk.StringVar(value='99');self.map_min=tk.StringVar();self.map_max=tk.StringVar();self.map_mode=tk.StringVar(value='Auto percentiles');self.map_scale=tk.StringVar(value='Linear');self.map_colorbar=None
         frame,head,controls,self.det_ax,self.det_canvas=self.new_plot(parent,'Detector image');parent.add(frame,weight=4)
         self.button(head,'Details',lambda:self.plot_details('detector'))
-        self.button(controls,'Contrast…',lambda:self.contrast_dialog(False));ttk.Checkbutton(controls,text='Mask overlay',variable=self.show_mask,command=lambda:self.guard(self.draw_detector)).pack(side='left',padx=6)
+        self.button(head,'Display…',lambda:self.contrast_dialog(False));ttk.Checkbutton(controls,text='Mask overlay',variable=self.show_mask,command=lambda:self.guard(self.draw_detector)).pack(side='left',padx=6)
+        self.build_filter_controls(frame,controls)
         self.right_plots=ttk.Panedwindow(parent,orient='vertical');parent.add(self.right_plots,weight=3)
         frame,head,controls,self.map_ax,self.map_canvas=self.new_plot(self.right_plots,'2D map');self.right_plots.add(frame,weight=1)
         self.button(head,'Save 2D',lambda:self.save_dialog(True));self.button(head,'Display...',lambda:self.contrast_dialog(True));self.button(head,'Details',lambda:self.plot_details('map'))
@@ -52,10 +55,12 @@ class PlotMixin:
             trace=self.map_mode.trace_add('write',states);states()
             win.bind('<Destroy>',lambda e:self.map_mode.trace_remove('write',trace) if e.widget==win else None)
             form.note('Auto uses finite populated bins, including valid zeros. Log hides nonpositive values on screen only. White areas have no displayed data.')
-        else:form.note('Percentiles affect the detector display only. The mask and scientific image remain unchanged.')
+        else:
+            form.note('Percentiles affect the detector display only. The mask and scientific image remain unchanged.')
+            self.filter_display_settings(form)
         row=ttk.Frame(form);form.add(row);self.button(row,'Apply',self.draw_map if two else self.draw_detector)
         self.button(row,'Reset',self.reset_map_display if two else self.reset_detector_display);self.button(row,'Close',win.destroy)
-    def reset_detector_display(self):self.low.set('1');self.high.set('99');self.draw_detector()
+    def reset_detector_display(self):self.low.set('1');self.high.set('99');self.filter_opacity.set('0.5');self.draw_detector()
     def reset_map_display(self):
         self.map_low.set('1');self.map_high.set('99');self.map_mode.set('Auto percentiles');self.map_scale.set('Linear');self.map_min.set('');self.map_max.set('');self.draw_map()
     def draw_map(self):
@@ -84,10 +89,22 @@ class PlotMixin:
             # A compact legend; complete source paths remain in Details.
             import textwrap
             handles,_=self.curve_ax.get_legend_handles_labels()
-            self.curve_ax.legend(handles,['\n'.join(textwrap.wrap(label,65)) for label in labels],fontsize=7,loc='best',framealpha=.8)
-        self.curve_ax.set_ylabel('Intensity');self.curve_ax.tick_params(labelsize=9);self.curve_ax.relim();self.curve_ax.autoscale();self.curve_nav.update();self.curve_canvas.draw_idle()
+            if len(labels)>3:
+                from .presentation import method_label
+                sources=list(dict.fromkeys(c.metadata.get('source','') for c in self.curves))
+                def compact(c):
+                    settings=c.metadata['settings'];method=settings['method_1d']
+                    name=(f"P{settings['percentile_low']:g}-{settings['percentile_high']:g}" if method=='percentile' else f"Sigma {settings['sigma_threshold']:g}" if method=='sigma_clip' else 'Avg')
+                    return f'#{sources.index(c.metadata.get("source",""))+1} '+name+' '+('Sector' if c.metadata.get('selection')=='sector' else 'Full')+('*' if c.metadata.get('comparison') else '')
+                labels=[compact(c) for c in self.curves]
+            legend=self.curve_ax.legend(handles,['\n'.join(textwrap.wrap(label,65)) for label in labels],fontsize=6,ncols=2 if len(labels)>3 else 1,loc='best',framealpha=.65)
+            # Long comparison legends must not collapse the intensity axes.
+            legend.set_in_layout(False)
+        self.curve_ax.set_ylabel('Intensity',fontsize=9);self.curve_ax.xaxis.label.set_fontsize(9);self.curve_ax.tick_params(labelsize=9);self.curve_ax.relim();self.curve_ax.autoscale();self.curve_nav.update();self.curve_canvas.draw_idle()
     def plot_details(self,kind):
         if kind=='detector':text=self.active or 'No active detector image.'
         elif kind=='map':text=json.dumps(self.map_meta,indent=2,default=str) if self.map_meta else 'No 2D result yet.'
-        else:text='\n\n'.join(label+'\n'+json.dumps(c.metadata,indent=2,default=str) for label,c in zip(curve_labels(self.curves),self.curves)) or 'No 1D results yet.'
+        else:
+            sources=list(dict.fromkeys(c.metadata.get('source','') for c in self.curves))
+            text='\n\n'.join(f'File #{sources.index(c.metadata.get("source",""))+1}: '+label+'\n'+json.dumps(c.metadata,indent=2,default=str) for label,c in zip(curve_labels(self.curves),self.curves)) or 'No 1D results yet.'
         self.help_dialog('Source and processing details',text)

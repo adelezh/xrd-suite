@@ -9,6 +9,7 @@ class Curve:
     intensity: np.ndarray
     sigma: np.ndarray | None = None
     metadata: dict = field(default_factory=dict)
+    diagnostic: object | None = field(default=None, repr=False, compare=False)
 
 def read_image(path):
     p = Path(path)

@@ -152,3 +152,25 @@ No remote repository, release, installer, or executable is created by this task.
 
 See [source provenance](docs/PROVENANCE.md) and
 [original Integration scientific details](docs/reference/integration/ROBUST_METHODS.md).
+
+## Detector filter exclusions
+
+After Sigma-clipping or Percentile filtering, enable **Show filter exclusions**
+next to Mask overlay. **Display…** contains opacity and selection of the prepared
+primary/full filtered curve. Red shows Sigma or upper-percentile exclusions;
+blue shows lower-percentile exclusions; the detector mask remains gray.
+
+Sigma uses exact iterative backend flags. Percentile uses verified contribution
+selection where unambiguous. Tied selections are marked amber in an explicitly
+labeled Partial overlay while verified decisions remain visible; amber does not
+mean rejected. If no contribution can be classified reliably, the overlay remains
+disabled with an explanation. No estimates or scientific-result changes are introduced.
+Changing the active file or processing settings disables outdated overlays.
+Preparation is limited to the active interactive image, not every batch file.
+
+See [diagnostic exactness, limitations, memory, and tests](docs/FILTER_OVERLAY.md).
+For the dedicated synthetic GUI check:
+
+```sh
+pixi run --locked python -m tests.filter_overlay_smoke --output test-output/filter-overlay
+```

@@ -113,6 +113,7 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
         if self.map_colorbar is not None:self.map_colorbar.remove();self.map_colorbar=None
         for ax,canvas in [(self.det_ax,self.det_canvas),(self.map_ax,self.map_canvas),(self.curve_ax,self.curve_canvas)]: ax.clear(); canvas.draw_idle()
         self.active_text.set('No active file');self.file_details.set('');self.update_calibration_summary();self.result_status.set('No results yet')
+        self.refresh_filter_controls()
         self.status.set('Cleared loaded files and validation status.')
     def calibrate(self):
         import importlib.util
@@ -134,6 +135,7 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
         if self.curves or self.map_result is not None:
             self.status.set('Results need updating - Run to update. Saved results retain their original settings.')
             self.refresh_result_status()
+        self.refresh_filter_controls()
     def browse_variance(self):
         p=self.choose('variance')
         if p:self.svars['variance'].set(p)
@@ -148,27 +150,36 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
         p=self.choose(folder=True)
         if p:self.files=sorted(set(self.files+[str(f) for f in Path(p).iterdir() if f.suffix.lower() in ('.tif','.tiff')]),key=natural_key); self.refresh_files()
     def load_active(self):
-        self.image_data=read_image(self.active); self.draw_detector()
+        from xrd_suite.filter_diagnostics import image_identity
+        self.image_data=read_image(self.active)
+        self.detector_image_id=image_identity(self.image_data)
+        self.draw_detector()
     def overlay_update(self):
         try:self.draw_detector()
         except (ValueError,TypeError):pass
     def draw_detector(self):
-        if self.image_data is None:return
+        if self.image_data is None:
+            self.refresh_filter_controls();return
         data=self.image_data; ax=self.det_ax; ax.clear(); ax.set_axis_on(); lo,hi=float(self.low.get()),float(self.high.get())
         if not 0<=lo<hi<=100:raise ValueError('Contrast percentiles need 0 <= low < high <= 100.')
         finite=data[np.isfinite(data)]
         if not finite.size:raise ValueError('Detector image has no finite values.')
         vmin,vmax=np.percentile(finite,[lo,hi]); ax.imshow(data,origin='upper',cmap='gray',vmin=vmin,vmax=vmax); ax.set_aspect('equal')
         if self.engine:
-            mask=self.engine.base_mask(data)
-            if self.show_mask.get():ax.imshow(np.ma.masked_where(~mask,mask),cmap='Reds',alpha=.4,vmin=0,vmax=1)
+            mask=np.zeros(data.shape,bool)
+            for original in (self.engine.mask,self.engine.ai.detector.mask):
+                if original is not None:mask |= original != 0
+            if self.show_mask.get():
+                rgba=np.zeros((*data.shape,4),np.float32);rgba[mask]=(.55,.55,.55,.7)
+                ax.imshow(rgba,origin='upper',interpolation='nearest',zorder=6)
             if self.sector.get():
                 start,end=float(self.svars['start'].get()),float(self.svars['end'].get()); chi=self.engine.chi(data.shape); region=sector_pixels(chi,start,end)
-                ax.imshow(np.ma.masked_where(~region,region),cmap='Blues',alpha=.22,vmin=0,vmax=1)
+                ax.imshow(np.ma.masked_where(~region,region),cmap='Blues',alpha=.22,vmin=0,vmax=1,origin='upper',zorder=2)
                 for angle in (start,end):
                     delta=(chi-angle+180)%360-180
                     # Mask the opposite-angle discontinuity to avoid a false contour.
-                    ax.contour(np.ma.masked_where(abs(delta)>90,delta),levels=[0],colors=['cyan'],linewidths=1)
+                    ax.contour(np.ma.masked_where(abs(delta)>90,delta),levels=[0],colors=['cyan'],linewidths=1,zorder=20)
+        self.draw_filter_overlay(ax)
         ax.set_title(short_source(self.active) if self.active else 'Detector',fontsize=10); ax.set_xlabel('Detector column (pixels)'); ax.set_ylabel('Detector row (pixels)'); self.det_canvas.draw_idle()
     def report(self,current,total,text):self.events.put(('progress',(current,total,text)))
     def require_engine(self):
@@ -182,13 +193,13 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
             curves=[]; result=None; metadata={}
             for i,source in enumerate(sources):
                 if self.cancel.is_set():break
-                c,m,meta=engine.integrate(read_image(source),settings,source,one,two and source==active); curves.extend(c)
+                c,m,meta=engine.integrate(read_image(source),settings,source,one,two and source==active,diagnostics=one and source==active); curves.extend(c)
                 if m is not None:result=m; metadata=meta
                 self.report(i+1,len(sources),f'Integrated {Path(source).name}')
             return curves,result,metadata
         def done(payload):
             curves,result,meta=payload
-            if one:self.curves=curves; self.curve_revision=rev1; self.draw_curves()
+            if one:self.curves=curves; self.curve_revision=rev1; self.filter_choice.set('0'); self.draw_curves(); self.draw_detector()
             for c in curves:
                 missing=len(c.metadata.get("invalid_bins",[]))
                 if missing:self.log.insert("end",f"{missing} empty/insufficient bins in {c.metadata.get('method_1d')} curve; reduce bins or restrict range.\n")

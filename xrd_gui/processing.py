@@ -49,7 +49,7 @@ class Engine:
             self.metadata['variance_sha256'] = hashlib.sha256(Path(settings.variance).read_bytes()).hexdigest()
 
     def chi(self, shape): return np.degrees(self.ai.center_array(shape, unit='chi_rad'))
-    def integrate(self, image, settings, source='', one=True, two=True):
+    def integrate(self, image, settings, source='', one=True, two=True, diagnostics=False):
         s = (settings if one else replace(settings,method_1d='average',compare_average=False)).validate()
         if s.unit == 'q_A^-1' and not self.ai.wavelength: raise ValueError('q integration needs a wavelength in the calibration.')
         base = self.base_mask(image); mask = base.copy()
@@ -77,12 +77,17 @@ class Engine:
                 available=coordinates[(~base) & np.isfinite(coordinates)]
                 radial_range=(float(available.min()),float(available.max()))
             if radial_range[0]>=radial_range[1]:raise ValueError('Insufficient radial extent for integration.')
-            selection='sector' if s.sector else 'full'
-            curves.append(robust_curve(self.ai,image,s,mask,variance,radial_range,meta,selection))
+            diagnostic_mask = None
+            if diagnostics:
+                diagnostic_mask = np.zeros(image.shape, bool)
+                for original in (self.mask, self.ai.detector.mask):
+                    if original is not None: diagnostic_mask |= original != 0
+            selection='sector' if s.sector else 'full' 
+            curves.append(robust_curve(self.ai,image,s,mask,variance,radial_range,meta,selection,diagnostic_mask=diagnostic_mask))
             if s.compare_average:
                 curves.append(robust_curve(self.ai,image,s,mask,variance,radial_range,meta,selection,method='average',reference=True))
             if s.sector and s.compare_full:
-                curves.append(robust_curve(self.ai,image,s,base,variance,radial_range,meta,'full comparison',reference=True))
+                curves.append(robust_curve(self.ai,image,s,base,variance,radial_range,meta,'full comparison',reference=True,diagnostic_mask=diagnostic_mask))
         # Map metadata records its actual ordinary estimator, not the selected 1D estimator.
         meta=dict(meta,method_1d='average',api='integrate2d_ng',settings=dict(meta['settings'],method_1d='average'))
         # 2D retains the full azimuth axis; excluded sector pixels remain empty.

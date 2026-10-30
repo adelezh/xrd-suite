@@ -1,4 +1,4 @@
-﻿"""Robust 1D estimators using the installed direct pyFAI APIs."""
+"""Robust 1D estimators using the installed direct pyFAI APIs."""
 import numpy as np
 
 ROBUST_BACKEND = ('no','csr','cython')
@@ -13,7 +13,7 @@ def uncertainty_description(method, model, quantile=False):
     if method != 'average':prefix+='; conditional SEM of the retained weighted mean; selection uncertainty and filtering bias are not included'
     return prefix
 
-def robust_curve(ai,image,settings,mask,variance,radial_range,metadata,selection,method=None,reference=False):
+def robust_curve(ai,image,settings,mask,variance,radial_range,metadata,selection,method=None,reference=False,diagnostic_mask=None):
     from .files import Curve
     s=settings;method=method or s.method_1d
     model=s.clipping_model if method=='sigma_clip' else s.error_model
@@ -45,4 +45,8 @@ def robust_curve(ai,image,settings,mask,variance,radial_range,metadata,selection
               xye_supported=not quantile and sigma is not None)
     if quantile:meta['xye_reason']=uncertainty
     meta['settings']=dict(metadata['settings'],method_1d=method)
-    return Curve(r.radial,y,sigma,meta)
+    diagnostic = None
+    if diagnostic_mask is not None and method != 'average':
+        from xrd_suite.pyfai_diagnostics import capture
+        diagnostic, meta['filter_diagnostic'] = capture(ai,r,image,s,mask,diagnostic_mask,meta)
+    return Curve(r.radial,y,sigma,meta,diagnostic)

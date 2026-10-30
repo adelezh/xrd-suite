@@ -128,9 +128,10 @@ class LayoutMixin:
         row=ttk.Frame(parent);row.pack(fill='x',pady=(0,6))
         add_files=self.button(row,'Add files',self.add_files)
         actions=ttk.Frame(row);actions.pack(side='left')
-        self.button(actions,'Add folder',self.add_folder)
+        self.button(actions,'Add folder',self.add_folder).configure(padding=(4,5))
         self.remove_files_button=self.button(actions,'Remove',self.remove_selected_files)
         self.clear_files_button=self.button(actions,'Clear',self.clear_file_list)
+        for button in (self.remove_files_button,self.clear_files_button):button.configure(padding=(4,5))
         Tooltip(self.remove_files_button,'Remove selected entries from this list; files on disk are not deleted.')
         Tooltip(self.clear_files_button,'Clear the entire input list, including filtered entries. Calibration and computed curves are retained.')
         # Keep Add folder / Remove / Clear together when the file pane is narrow.
