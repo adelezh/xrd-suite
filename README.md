@@ -33,6 +33,36 @@ runtime checks remain pending. Intel macOS is not a declared target. See
 
 ## Integration to Analysis
 
+### Detector calibration
+
+The calibration button opens the unmodified pyFAI calibration application in a
+separate process using this environment's Python (`python -s -m pyFAI.app.calib2`).
+You can also launch it without Integration: `pixi run --locked calibration`.
+Load your calibration image and configure the detector, wavelength, calibrant,
+and mask inside pyFAI. Integration does not pass its image or geometry settings,
+patch fitting or ring extraction, or override numerical thread settings.
+The `-s` flag excludes unrelated user-installed Python packages.
+
+For a new calibration, manually pick correctly numbered ring points and use
+the picked points as the extraction geometry source before extracting more
+rings (use fitted geometry only after a fit exists). Save the PONI in pyFAI,
+then explicitly load/reload it in Integration. Closing Integration does not
+close the separate calibration process.
+
+Each launch records pyFAI debug output in `.test-output/calibration/pyfai-*.log`
+inside this project. The status bar shows the log path. These logs help diagnose
+failed fits without changing pyFAI's calibration algorithms or settings.
+
+On Windows, the locked environment uses the non-MKL NumExpr build and OpenBLAS.
+The previous MKL NumExpr build produced incorrect angles from pyFAI's interleaved
+coordinate arrays, creating spurious ring contours and stalling the geometry
+screen after the optimizer finished. Regression checks cover both the angle map
+and stock pyFAI GUI fitting/rendering with a 2048 × 2048 PerkinElmer/CeO₂ case.
+After updating, close and reopen all suite and calibration windows so they use
+the corrected libraries. pyFAI itself is not patched.
+
+### Retained curves
+
 1. In Integration, load a PONI calibration and optional mask, add TIFFs, and select
    one or more images. Set units, bins, corrections, and the 1D method. Run 1D or
    Run Both.

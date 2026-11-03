@@ -118,11 +118,19 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
     def calibrate(self):
         import importlib.util
         if not any(importlib.util.find_spec(m) for m in ('PyQt6','PySide6','PyQt5','PySide2')): raise ValueError('pyFAI-calib2 needs a Qt binding in this Python environment. Install PyQt6; the main application uses Tkinter.')
-        env=os.environ.copy()
-        command=[sys.executable,'-m','pyFAI.app.calib2']
-        if self.active: command.append(self.active)
-        subprocess.Popen(command,cwd=self.workspace.get(),env=env,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-        self.status.set('Calibration launched separately. Load/Reload saved .poni and mask changes explicitly.')
+        # Run the stock application in its own interpreter, with no suite
+        # adapters or integration inputs. -s excludes unrelated user packages.
+        from datetime import datetime
+        log_dir=Path(__file__).resolve().parents[1]/'.test-output'/'calibration'
+        log_dir.mkdir(parents=True,exist_ok=True)
+        log_path=log_dir/f'pyfai-{datetime.now():%Y%m%d-%H%M%S-%f}.log'
+        command=[sys.executable,'-s','-u','-X','faulthandler','-m','pyFAI.app.calib2','--debug']
+        # Capture stock pyFAI diagnostics even when Windows has no console.
+        # The child owns its inherited handle after this context closes.
+        with log_path.open('w',encoding='utf-8') as output:
+            subprocess.Popen(command,cwd=self.workspace.get(),stdout=output,stderr=subprocess.STDOUT,
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        self.status.set(f'Standalone pyFAI opened. Diagnostic log: {log_path}')
     def dirty(self,*_,one=True,two=True):
         self.revision += 1
         if one:self.revision_1d+=1

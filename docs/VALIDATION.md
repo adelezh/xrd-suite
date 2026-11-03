@@ -38,6 +38,31 @@
 
 ## Dependency choices
 
+### Standalone calibration correction — 2026-11-03
+
+The stock pyFAI geometry GUI stalled on synthetic 2048 × 2048 PerkinElmer/CeO₂
+control points even though its optimizer completed in under one second. Stack
+dumps placed the stall in ring-curve creation. For a centered planar detector
+at 0.3 m, the MKL NumExpr build returned a maximum 2θ of 3.13928 rad instead of
+the independent NumPy result, 0.76757 rad. Contiguous copies evaluated correctly;
+pyFAI's interleaved coordinate views did not.
+
+The Windows lock now selects NumExpr 2.14.2 `py312h0c4f959_101` (non-MKL) and its
+OpenBLAS dependencies. The angle map then matched NumPy, and the unmodified
+geometry GUI initialized, fitted, and rendered in approximately five seconds.
+No pyFAI source or optimizer was patched. The suite's existing NumPy coordinate
+workaround is retained. Other platforms' locked packages are unchanged.
+
+Validation: `python -s -m pytest tests/integration/test_calibration.py -q`:
+**3 passed**, including a separate-process Qt geometry/plot check with a timeout.
+Full suite with user-site imports disabled: **108 passed, 2 failed**; both failures
+are Tk launcher checks reporting missing `init.tcl`, also observed before this
+dependency change. `pixi run --locked calibration --help` succeeds. The actual
+experimental TIFF was inspected as 2048 × 2048 float32; no experimental geometry
+was fitted because wavelength and picked control points were not provided.
+
+### Original dependency baseline
+
 The existing Integration lockfile was the baseline where its requirements text
 and manifest disagreed. Preserve pyFAI 2026.9.0, Fabio 2025.10.0, NumPy 2.5.4,
 SciPy 1.18.1, and Matplotlib 3.11.2. The NumPy coordinate-equation workaround is

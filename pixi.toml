@@ -6,6 +6,7 @@ platforms = ["win-64", "linux-64", "osx-arm64"]
 
 [tasks]
 integration = "python -m xrd_gui"
+calibration = "python -s -m pyFAI.app.calib2"
 monitor = "python -m xrd_monitor"
 test = "python -m pytest -q"
 smoke = "python -m tests.gui_smoke"
@@ -26,3 +27,8 @@ pytest = ">=9.1.1,<10"
 pymatgen = "*"
 pyyaml = ">=6,<7"
 openpyxl = ">=3.1,<4"
+
+[target.win-64.dependencies]
+# The MKL build miscomputes pyFAI's interleaved coordinate views, producing
+# spurious ring contours that stall the calibration GUI. Keep the non-MKL build.
+numexpr = { version = "==2.14.2", build = "py312*" }
