@@ -1,4 +1,4 @@
-"""Audited adapter for pyFAI 2026.9.0, no-split CSR/Cython only.
+"""Audited adapter for pyFAI 2026.9.0, CSR/Cython percentile splitting and no-split sigma.
 
 Never changes the engine or reruns filtering. Sigma reads the backend's iterative
 NaN count flags. Percentile replays only its contribution-selection bookkeeping
@@ -103,15 +103,15 @@ def capture(ai, result, image, settings, integration_mask, original_mask, metada
     """Return frozen diagnostic + serializable status; errors never change results."""
     import pyFAI
     report = dict(exactness='unsupported', pyfai_version=pyFAI.version,
-                  backend=['no', 'csr', 'cython'], reason='')
+                  backend=metadata['method'], reason='')
     try:
         if pyFAI.version != SUPPORTED_VERSION:
             raise UnsupportedDiagnostic(f'Overlay adapter is audited for pyFAI {SUPPORTED_VERSION}, not {pyFAI.version}.')
         method = result.method
-        if tuple(str(part).lower() for part in (method.split, method.algo, method.impl)) != ('no', 'csr', 'cython'):
+        if (method.algo.lower(),method.impl.lower()) != ('csr','cython') or method.split.lower() not in ('no','bbox','full'):
             raise UnsupportedDiagnostic('This backend/pixel-splitting scheme has no audited diagnostic adapter.')
         engine = ai.engines[method].engine
-        if type(engine).__module__ != 'pyFAI.ext.splitBBoxCSR' or type(engine).__name__ != 'HistoBBox1d':
+        if (type(engine).__module__,type(engine).__name__) not in (('pyFAI.ext.splitBBoxCSR','HistoBBox1d'),('pyFAI.ext.splitPixelFullCSR','FullSplitCSR_1d')):
             raise UnsupportedDiagnostic('Unrecognized CSR engine type.')
         if image.size * (22 if settings.method_1d == 'percentile' else 21) > MAX_DIAGNOSTIC_BYTES:
             raise UnsupportedDiagnostic('Overlay exceeds the 128 MiB per-result diagnostic memory limit.')
@@ -119,8 +119,10 @@ def capture(ai, result, image, settings, integration_mask, original_mask, metada
         coefficients, pixels, indptr = map(np.asarray, engine.lut)
         if pre.shape != (image.size, 4) or pre.dtype != np.float32 or len(indptr) != len(result.intensity)+1:
             raise UnsupportedDiagnostic('Unrecognized preprocessing buffer or contribution table.')
-        if np.any(coefficients != 1) or len(np.unique(pixels)) != len(pixels):
+        if settings.method_1d == 'sigma_clip' and (np.any(coefficients != 1) or len(np.unique(pixels)) != len(pixels)):
             raise UnsupportedDiagnostic('Expected one unsplit contribution per detector pixel.')
+        if len(pixels)*64 + image.size*22 > MAX_DIAGNOSTIC_BYTES:
+            raise UnsupportedDiagnostic('Split contribution overlay exceeds the 128 MiB diagnostic memory limit.')
         bins = np.repeat(np.arange(len(indptr)-1), np.diff(indptr))
         values = pre[pixels]
         eligible = np.isfinite(values[:, :3]).all(axis=1) & (values[:, 2] > 0)
@@ -186,6 +188,10 @@ def capture(ai, result, image, settings, integration_mask, original_mask, metada
         eligibility.ravel()[pixels] = ELIGIBLE
         radial_bin = np.full(image.shape, -1, np.int32)
         radial_bin.ravel()[pixels] = bins
+        # No unique radial bin exists for split pixels. Consumers use the
+        # explicit unresolved-pixel flags and aggregated contribution weights.
+        repeated = np.bincount(pixels, minlength=image.size) > 1
+        radial_bin.ravel()[repeated] = -1
         provenance = json.dumps(metadata, sort_keys=True, default=str)
         unresolved = None
         if unresolved_bins:

@@ -4,7 +4,7 @@ The detector's **Show filter exclusions** checkbox visualizes a completed filter
 1D curve for the active image. **Display…** beside Details contains opacity and
 filtered-result selection (primary or full-azimuth filtered comparison). An
 Average comparison is never used as the source of an exclusion overlay. The
-ordinary 2D intensity map and all numerical integration methods are unchanged.
+overlay never changes the ordinary 2D intensity map or numerical integration results.
 
 Red indicates Sigma-clipping rejection or upper-percentile exclusion; blue
 indicates lower-percentile exclusion. The original detector mask is neutral gray.
@@ -15,11 +15,26 @@ reusable detector mask and are never automatically exported as one.
 
 ## Audited implementation and exactness
 
-Inspected installed **pyFAI 2026.9.0**, `('no', 'csr', 'cython')`, engine
-`pyFAI.ext.splitBBoxCSR.HistoBBox1d`. Both existing robust methods already use
-this backend with **no pixel splitting**. No installed package modifications,
-monkey-patching, estimator/backend changes, error-model changes, or new filtering
-runs are used to obtain diagnostics.
+Inspected installed **pyFAI 2026.9.0**. Average and percentile integration use
+`(pixel_splitting, 'csr', 'cython')`, with **Bounding box (`bbox`)** as the default.
+Advanced ? Pixel splitting also offers Full (`full`) and None (`no`). Sigma
+clipping and its average reference retain `('no', 'csr', 'cython')`; the selector
+is disabled in that mode without losing the saved preference. Ordinary 2D maps
+use the saved splitting choice. Exact registry lookup and returned-method checks
+prevent silent backend substitution.
+
+Percentile filtering remains direct `medfilt1d_ng`: it sorts detector-pixel
+contributions within radial bins and computes the existing weighted trimmed
+mean (default 25?75), or single quantile for equal limits. It does not filter a
+2D cake or smooth the resulting curve. Its average reference shares the same
+splitting, radial range/grid, masks, sector selection, and corrections.
+
+The diagnostic engines are `pyFAI.ext.splitBBoxCSR.HistoBBox1d` (no/bbox) and
+`pyFAI.ext.splitPixelFullCSR.FullSplitCSR_1d` (full). No installed package
+modifications or additional filtering runs are used to obtain diagnostics.
+For split pixels, overlay fractions aggregate actual coefficient-weighted
+contributions, including partial retention/rejection across radial bins.
+Unresolved weight excludes contributions already classified for that pixel.
 
 The isolated adapter is `xrd_suite/pyfai_diagnostics.py`. It checks the version,
 backend, engine class, preprocessing buffer, and contribution-table structure.
@@ -88,7 +103,8 @@ and revalidating this adapter before adding another supported version.
 Each immutable `FilterDiagnostic` owns four float32 detector-shaped arrays:
 eligible, retained, lower-excluded, and upper-excluded effective normalization
 weights. Sigma rejections use upper-excluded weight. It also owns eligibility
-codes and the eligible radial-bin index for this no-split backend. Original-mask,
+codes and the radial-bin index where unique (-1 for pixels contributing to
+multiple bins). Original-mask,
 invalid-input, out-of-selection, and no-contribution pixels do not acquire
 filter-exclusion color. Mask/sector and radial membership come from the actual
 integration selection and CSR table, not a separate azimuth-unwrapping algorithm.
@@ -97,15 +113,12 @@ Rendering alpha equals display opacity times excluded weight / eligible weight.
 The aggregation and renderer support multiple contributions per pixel: partial
 exclusion is fainter, and simultaneous lower and upper exclusions are purple.
 They never force such a pixel into a binary mask or discard one category.
-An optional immutable boolean array marks unresolved no-split contributions;
-`unresolved_weight` is their eligible weight, computed separately. Retained,
-lower, upper and unresolved weights together account for eligible weight. The
-current audited backend is unsplit, so ordinary eligible pixels are wholly
-retained or excluded. Split backends remain unsupported until their decisions
-can be retrieved and validated; synthetic contribution tests cover future mixed
-and partial rendering without claiming backend support. No weighted fraction is
-reported as a percentage of unique pixels. No radial–azimuth exclusion map is
-implemented in this iteration.
+An optional immutable boolean array marks pixels with unresolved contributions.
+`unresolved_weight` is eligible weight minus classified retained/lower/upper
+weights for those pixels. Retained, lower, upper and unresolved weights together
+account for eligible weight, including pixels partly resolved across bins.
+No weighted fraction is reported as a percentage of unique pixels. No
+radial?azimuth exclusion map is implemented in this iteration.
 
 ## Association, memory, and performance
 
@@ -164,3 +177,42 @@ file/settings/mask changes, stale asynchronous completion, Average disabling,
 clearing the input list, and small-window control/plot geometry. Captures are of
 the specific application window and detector figure. Linux/macOS GUI checks and
 real beamline-data validation remain unexecuted.
+
+
+## Pixel splitting verification (2026-11-13)
+
+Focused integration tests cover all three schemes, full-ring and crossing-boundary
+sectors, direct pyFAI agreement, percentile limits and average comparisons,
+reused engines after changing schemes, preview/batch equivalence, XYE and 2D
+exports, saved/default preferences, UI revision invalidation, and sigma-mode
+selector disabling. The GUI uses its existing manual Run-to-update mechanism;
+old results remain associated with their original settings and are marked outdated.
+pyFAI engine cache keys include the exact splitting method. JSON/NPZ metadata
+records both saved settings and the actual backend tuple.
+
+Compared the bundled `examples/synthetic/dark_sub/synthetic_primary-dk_sub_image-00000.tiff`
+with its supplied calibration and mask, 120 radial bins over 1.5?5 degrees,
+full azimuth, solid-angle correction off, polarization factor 0, and percentile
+limits 25?75. All six curves peak at 3.00208 degrees. These are sampled curve
+metrics, not fitted parameters: FWHM uses half prominence; area integrates
+2.6?3.4 degrees after subtracting the median background over 3.6?4.5 degrees.
+Roughness is the standard deviation of second intensity differences in that
+background window. The finite window excludes peak tails, so area is not the
+synthetic model's total area of 80.
+
+| Estimator | Splitting | FWHM (degrees) | Window area | Background roughness |
+|---|---|---:|---:|---:|
+| Average | no | 0.12058 | 76.2101 | 0.005319 |
+| Average | bbox | 0.13488 | 76.9208 | 0.004171 |
+| Average | full | 0.12970 | 76.9219 | 0.004204 |
+| Percentile | no | 0.12032 | 76.0416 | 0.006497 |
+| Percentile | bbox | 0.12755 | 76.1990 | 0.004331 |
+| Percentile | full | 0.12422 | 76.4535 | 0.004840 |
+
+Splitting reduces background roughness here but broadens the peak. Areas differ
+by less than 1% across schemes for each estimator; smoothness alone is not a
+correctness criterion. Plot and raw metrics from this run are in
+`.test-output/pixel-splitting/`. This is a synthetic diffraction-image check,
+not validation against a calibrated experimental dataset. Split-bin covariance
+is not added to the existing per-bin uncertainty exports. Single-quantile XYE
+and ambiguous overlay identities retain their existing limitations.

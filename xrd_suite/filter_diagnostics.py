@@ -46,14 +46,10 @@ class FilterDiagnostic:
 
     @property
     def unresolved_weight(self):
-        """Eligible weight whose selection is unknown, never treated as retained/rejected.
-
-        This compact representation is for the audited no-split backend: every
-        unresolved contribution is withheld from classification. A boolean array
-        distinguishes unresolved tied groups from resolved pixels in the same bin.
-        """
-        unknown = self.unresolved if self.unresolved is not None else np.isin(self.radial_bin, self.unresolved_bins)
-        return np.where(unknown, self.eligible_weight, 0)
+        """Unclassified contribution weight, including partially resolved split pixels."""
+        return np.maximum(0, self.eligible_weight - self.retained_weight
+                          - self.lower_weight - self.upper_weight) * (
+            self.unresolved if self.unresolved is not None else np.isin(self.radial_bin, self.unresolved_bins))
 
     @property
     def nbytes(self):

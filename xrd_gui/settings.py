@@ -25,8 +25,10 @@ class Settings:
     percentile_low: float = 25.0
     percentile_high: float = 75.0
     compare_average: bool = False
+    pixel_splitting: str = 'bbox'
 
     def validate(self):
+        if self.pixel_splitting not in ('full','bbox','no'): raise ValueError('Choose Full, Bounding box, or None pixel splitting.')
         if self.unit not in ('2th_deg', 'q_A^-1'): raise ValueError('Choose 2theta or q units.')
         if not 1 <= self.radial_bins <= 100000 or not 1 <= self.azimuth_bins <= 10000:
             raise ValueError('Radial bins must be 1–100000; azimuth bins 1–10000.')
@@ -83,7 +85,7 @@ class Preferences:
 
 METHOD_DEFAULTS = {k:asdict(Settings())[k] for k in (
     'method_1d','sigma_threshold','sigma_iterations','clipping_model',
-    'percentile_low','percentile_high','compare_average')}
+    'percentile_low','percentile_high','compare_average','pixel_splitting')}
 
 def restore_method_preferences(data):
     """Old or malformed preferences cannot prevent startup."""
@@ -102,6 +104,7 @@ def restore_method_preferences(data):
             values[key]=value
         except (TypeError,ValueError,OverflowError):pass
     if values['method_1d'] not in ('average','sigma_clip','percentile'):values['method_1d']='average'
+    if values['pixel_splitting'] not in ('full','bbox','no'):values['pixel_splitting']='bbox'
     if values['clipping_model'] not in ('azimuthal','poisson','supplied'):values['clipping_model']='azimuthal'
     if not math.isfinite(values['sigma_threshold']) or values['sigma_threshold']<=0:values['sigma_threshold']=5.
     if values['sigma_iterations']<1:values['sigma_iterations']=5

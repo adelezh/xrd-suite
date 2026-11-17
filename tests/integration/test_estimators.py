@@ -19,15 +19,16 @@ def data(tmp_path):
     engine.mask=np.zeros_like(image,bool);engine.mask[5:8,:]=True
     return engine,image,clean
 
+@pytest.mark.parametrize('split',['bbox','full','no'])
 @pytest.mark.parametrize('method',['sigma_clip','percentile'])
 @pytest.mark.parametrize('sector',[False,True])
-def test_direct_and_comparisons(data,method,sector):
+def test_direct_and_comparisons(data,method,sector,split):
     engine,image,clean=data
-    s=Settings(method_1d=method,radial_bins=24,azimuth_bins=16,sector=sector,start=160,end=-160,compare_full=True,compare_average=True,error_model='poisson')
+    s=Settings(method_1d=method,pixel_splitting=split,radial_bins=24,azimuth_bins=16,sector=sector,start=160,end=-160,compare_full=True,compare_average=True,error_model='poisson')
     curves,m,meta=engine.integrate(image,s)
     c=curves[0];mask=engine.base_mask(image)
     if sector:mask|=~sector_pixels(engine.chi(image.shape),s.start,s.end)
-    kw=dict(mask=mask,unit=s.unit,radial_range=c.metadata['effective_radial_range'],correctSolidAngle=s.solid_angle,polarization_factor=s.polarization,method=('no','csr','cython'))
+    kw=dict(mask=mask,unit=s.unit,radial_range=c.metadata['effective_radial_range'],correctSolidAngle=s.solid_angle,polarization_factor=s.polarization,method=('no' if method=='sigma_clip' else s.pixel_splitting,'csr','cython'))
     if method=='sigma_clip':r=engine.ai.sigma_clip_ng(image,24,thres=5,max_iter=5,error_model='azimuthal',**kw)
     else:r=engine.ai.medfilt1d_ng(image,24,percentile=(25,75),error_model='poisson',**kw)
     valid=np.isfinite(c.intensity)
@@ -36,19 +37,20 @@ def test_direct_and_comparisons(data,method,sector):
     np.testing.assert_array_equal(c.x,curves[1].x)
     np.testing.assert_allclose(curves[1].intensity[np.isfinite(curves[1].intensity)],ref.intensity[np.isfinite(curves[1].intensity)])
     assert len(curves)==(3 if sector else 2)
-    assert c.metadata['method']==['no','csr','cython']
+    assert c.metadata['method']==['no' if method=='sigma_clip' else s.pixel_splitting,'csr','cython']
     ordinary,oldmap,_=engine.integrate(image,replace(s,method_1d='average'))
     np.testing.assert_array_equal(m.intensity,oldmap.intensity)
     assert meta['method_1d']=='average'
     if not sector:assert np.nanmax(curves[1].intensity-c.intensity)>20
 
+@pytest.mark.parametrize('split',['bbox','full','no'])
 @pytest.mark.parametrize('bounds',[(0,100),(25.5,75.25),(50,50),(0,0),(100,100)])
-def test_percentile_bounds(data,bounds,tmp_path):
-    engine,image,_=data;s=Settings(method_1d='percentile',radial_bins=20,percentile_low=bounds[0],percentile_high=bounds[1],error_model='poisson')
+def test_percentile_bounds(data,bounds,tmp_path,split):
+    engine,image,_=data;s=Settings(method_1d='percentile',pixel_splitting=split,radial_bins=20,percentile_low=bounds[0],percentile_high=bounds[1],error_model='poisson')
     c=engine.integrate(image,s,two=False)[0][0]
     arg=bounds[0] if bounds[0]==bounds[1] else bounds
     assert s.percentile_argument==arg
-    r=engine.ai.medfilt1d_ng(image,20,percentile=arg,method=('no','csr','cython'),unit=s.unit,radial_range=c.metadata['effective_radial_range'],mask=engine.base_mask(image),correctSolidAngle=True,polarization_factor=.99,error_model='poisson')
+    r=engine.ai.medfilt1d_ng(image,20,percentile=arg,method=(s.pixel_splitting,'csr','cython'),unit=s.unit,radial_range=c.metadata['effective_radial_range'],mask=engine.base_mask(image),correctSolidAngle=True,polarization_factor=.99,error_model='poisson')
     np.testing.assert_allclose(c.intensity,r.intensity)
     if bounds[0]==bounds[1]:
         assert c.sigma is None

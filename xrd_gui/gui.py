@@ -32,6 +32,8 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
         width=min(1500,self.winfo_screenwidth()-80); height=min(950,self.winfo_screenheight()-100)
         self.geometry(f'{width}x{height}+20+20'); self.minsize(900,600)
         self.prefs = preferences or Preferences(); self.engine = None; self.files = []; self.visible = []; self.active = None; self.image_data = None
+        self.save_metadata=tk.BooleanVar(value=self.prefs.data.get('save_metadata',False) is True)
+        self.save_metadata.trace_add('write',self.persist_export_preferences)
         self.curves = []; self.map_result = None; self.map_meta = {}; self.revision = 0; self.revision_1d=0; self.revision_2d=0; self.curve_revision=-1; self.map_revision=-1; self.busy = False; self.events = queue.Queue(); self.cancel = threading.Event()
         self.status = tk.StringVar(value='Load a calibration and TIFF files.'); self.loaded = tk.StringVar(value='No calibration loaded')
         self.workspace = tk.StringVar(value=self.prefs.data.get('workspace',default_workspace())); self.poni = tk.StringVar(); self.mask = tk.StringVar(); self.mask_enabled = tk.BooleanVar(value=True)
@@ -215,6 +217,10 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
             self.refresh_result_status()
             self.status.set('Cancelled; completed results retained.' if self.cancel.is_set() else ('Results need updating — inputs/settings changed during processing.' if revision!=self.revision else 'Integration complete. Results are not saved automatically.'))
         self.start_worker(work,done)
+    def persist_export_preferences(self,*_):
+        self.prefs.data['save_metadata']=self.save_metadata.get()
+        self.prefs.save()
+
     def save_dialog(self,two):
         if (two and self.map_result is None) or (not two and not self.curves):raise ValueError('Run the requested integration first.')
         win=tk.Toplevel(self); win.title('Save 2D' if two else 'Save 1D'); win.transient(self)
@@ -223,6 +229,7 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
             ttk.Label(win,text='Choose computed curve (original settings retained)').pack()
             ttk.Combobox(win,textvariable=choice,values=[f'{i}: {label}' for i,label in enumerate(curve_labels(self.curves))],width=80,state='readonly').pack()
         ttk.Combobox(win,textvariable=fmt,values=['npz'] if two else ['xy','chi','xye'],state='readonly').pack()
+        if not two:ttk.Checkbutton(win,text='Save metadata (.json)',variable=self.save_metadata).pack(anchor='w',padx=12,pady=6)
         def save(plot=False):
             ext='.png' if plot else '.'+fmt.get()
             from .naming import output_name, add_method_tag
@@ -236,8 +243,8 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
             omitted=0
             if plot:atomic_write(p,lambda q:(self.map_ax if two else self.curve_ax).figure.savefig(q,dpi=180))
             elif two:write_map(p,self.map_result,self.map_meta)
-            else:omitted=write_curve(p,self.curves[int(choice.get().split(':')[0])])
-            self.prefs.remember('output',str(Path(p).parent)); self.status.set('Saved '+p+(f' ({omitted} undefined bins omitted; see JSON metadata)' if omitted else '')); win.destroy()
+            else:omitted=write_curve(p,self.curves[int(choice.get().split(':')[0])],save_metadata=self.save_metadata.get())
+            self.prefs.remember('output',str(Path(p).parent)); self.status.set('Saved '+p+(f' ({omitted} undefined bins omitted'+('; see JSON metadata)' if self.save_metadata.get() else ')') if omitted else '')); win.destroy()
         row=ttk.Frame(win); row.pack(); self.button(row,'Save numerical data',save); self.button(row,'Export plot PNG',lambda:save(True))
     def job_folder(self,var):
         p=self.choose('output',folder=True)
@@ -248,7 +255,8 @@ class App(MethodsMixin, LayoutMixin, PlotMixin, JobsMixin, tk.Tk):
     def start_batch(self):
         if self.batch_settings is None:raise ValueError('Click Use current diagnostic settings first.')
         settings=self.batch_settings; engine=self.require_engine(); engine.freeze_variance(settings); plan=self.get_batch_plan(); self.preview_batch(); policy=self.bvars['policy'].get()
-        self.start_worker(lambda:run_batch(engine,settings,plan,policy,self.cancel,self.report),self.job_finished)
+        save_metadata=self.save_metadata.get()
+        self.start_worker(lambda:run_batch(engine,settings,plan,policy,self.cancel,self.report,save_metadata=save_metadata),self.job_finished)
     def job_finished(self,counts):self.status.set('Complete: '+', '.join(f'{k}: {v}' for k,v in counts.items())); self.log.insert('end',self.status.get()+'\n')
 
 def main():

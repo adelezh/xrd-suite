@@ -34,6 +34,7 @@ class JobsMixin:
         box.field('Output folder',variables['folder']);box.add(ttk.Button(box,text='Browse folder…',command=lambda:self.guard(lambda:self.job_folder(variables['folder']))))
         if styles:box.field('Filename style',variables['naming'],['Keep original','Shorten standard'])
         box.field('Existing files',variables['policy'],['Skip','Overwrite','Unique name'])
+        box.check('Save metadata (.json)',self.save_metadata)
         return box
     def batch_tab(self):
         self.batch_files=[];self.batch_settings=None;self.bvars={k:tk.StringVar(value=v) for k,v in dict(folder=str(data_dir()/'exports'),naming='Shorten standard',policy='Skip',extension='.xy').items()}
@@ -171,7 +172,8 @@ class JobsMixin:
         return plan
     def start_manip(self):
         plan=self.get_manip_plan();self.preview_manip();v,_,_,approx=self.manip_values()
-        self.start_worker(lambda:run_manipulation(plan,v['operation'],v['policy'],v['scale'],approx,self.cancel,self.report),self.job_finished)
+        save_metadata=self.save_metadata.get()
+        self.start_worker(lambda:run_manipulation(plan,v['operation'],v['policy'],v['scale'],approx,self.cancel,self.report,save_metadata=save_metadata),self.job_finished)
 
     def start_worker(self,work,done):
         if self.busy:raise ValueError('A job is already running. Cancel or wait for completion.')

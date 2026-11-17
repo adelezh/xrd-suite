@@ -1,10 +1,12 @@
 """Method controls and product-specific invalidation."""
 import tkinter as tk
 from tkinter import ttk
-from .widgets import Form
+from .widgets import Form, Tooltip
 from .settings import METHOD_DEFAULTS, restore_method_preferences
 
 METHOD_LABELS={'Average':'average','Sigma-clipping':'sigma_clip','Percentile filtering':'percentile'}
+SPLITTING_LABELS={'Full':'full','Bounding box':'bbox','None':'no'}
+SPLITTING_TOOLTIP='Distributes each detector pixel’s contribution across overlapping integration bins. Can improve smoothness; neighboring output points may be correlated.'
 
 class MethodsMixin:
     def build_methods(self,basic,advanced):
@@ -30,6 +32,12 @@ class MethodsMixin:
         self.clip_advanced.field('Maximum iterations',self.method_vars['sigma_iterations'])
         self.clip_advanced.field('Clipping variance',self.method_vars['clipping_model'],['azimuthal','poisson','supplied'])
         self.clip_advanced.note('Determines rejection and retained-pixel SEM. It does not use the Average / percentile / 2D model.')
+        splitting=Form(advanced,'Pixel splitting')
+        splitting.grid(row=2,column=0,columnspan=2,sticky='ew')
+        self.splitting_display=tk.StringVar(value=next(k for k,v in SPLITTING_LABELS.items() if v==values['pixel_splitting']))
+        self.splitting_control=splitting.field('Method',self.splitting_display,list(SPLITTING_LABELS))
+        self.splitting_tooltip=Tooltip(self.splitting_control,SPLITTING_TOOLTIP)
+        self.splitting_display.trace_add('write',lambda *_:self.method_vars['pixel_splitting'].set(SPLITTING_LABELS[self.splitting_display.get()]))
         basic.add(ttk.Button(basic,text='Filtering / uncertainty help',command=lambda:self.help_dialog('1D estimators',
             'Average is unchanged. Filtering operates within radial bins, not between neighboring curve points. It can suppress genuine spotty Bragg scattering and change peak areas.\n\nSigma-clipping uses no pixel splitting. Azimuthal dispersion is the default diagnostic model. Its returned SEM describes retained pixels, not selection uncertainty.\n\nPercentile bounds are 0-100 in the installed Cython API. An interval computes a weighted trimmed mean. Equal bounds request a quantile. The 2D azimuth bins do not control filtering.\n\nPoisson or supplied-variance interval errors are conditional propagated SEM; filtering bias and selection uncertainty are not included. Median/single-quantile XYE is unavailable; use XY/CHI. Undefined bins appear as gaps and are omitted on export, with omitted indices recorded in JSON metadata. No interpolation is performed.\n\nCompare with average keeps the same selection and grid. Compare full azimuth keeps the chosen estimator. References are diagnostic and are saved only when explicitly selected.')))
         # Keep the selector and active parameters at the top of the scrollable form.
@@ -50,6 +58,8 @@ class MethodsMixin:
 
     def update_method_visibility(self):
         method=self.method_vars['method_1d'].get()
+        self.splitting_control.configure(state='disabled' if method=='sigma_clip' else 'readonly')
+        self.splitting_tooltip.text=('Sigma-clipping requires no pixel splitting. Your choice is retained for average and percentile modes.' if method=='sigma_clip' else SPLITTING_TOOLTIP)
         if method=='average':self.method_area.grid_remove()
         else:self.method_area.grid()
         for form in (self.clip_form,self.percentile_form,self.average_check):form.pack_forget()
@@ -66,11 +76,15 @@ class MethodsMixin:
     def method_changed(self,key):
         self.update_method_visibility()
         method=self.method_vars['method_1d'].get()
+        if key=='pixel_splitting':
+            self.dirty()
+            return
         if key=='method_1d' or (method=='sigma_clip' and key in ('sigma_threshold','sigma_iterations','clipping_model')) or (method=='percentile' and key.startswith('percentile_')):
             self.dirty(two=False)
 
     def method_options(self,one=True):
         values=dict(METHOD_DEFAULTS)
+        values['pixel_splitting']=self.method_vars['pixel_splitting'].get()
         if not one:return values
         method=self.method_vars['method_1d'].get();values['method_1d']=method
         values['compare_average']=self.compare_average.get() if method!='average' else False

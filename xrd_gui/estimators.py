@@ -1,7 +1,6 @@
 """Robust 1D estimators using the installed direct pyFAI APIs."""
 import numpy as np
-
-ROBUST_BACKEND = ('no','csr','cython')
+from .splitting import integration_method, actual_method
 
 def uncertainty_description(method, model, quantile=False):
     if method == 'percentile' and quantile:
@@ -17,8 +16,9 @@ def robust_curve(ai,image,settings,mask,variance,radial_range,metadata,selection
     from .files import Curve
     s=settings;method=method or s.method_1d
     model=s.clipping_model if method=='sigma_clip' else s.error_model
+    backend=integration_method('no' if s.method_1d=='sigma_clip' else s.pixel_splitting)
     kw=dict(unit=s.unit,radial_range=radial_range,correctSolidAngle=s.solid_angle,
-            polarization_factor=s.polarization,method=ROBUST_BACKEND,mask=mask,
+            polarization_factor=s.polarization,method=backend,mask=mask,
             variance=variance if model=='supplied' else None,
             error_model=model if model in ('azimuthal','poisson') else None)
     if method=='sigma_clip':
@@ -38,7 +38,7 @@ def robust_curve(ai,image,settings,mask,variance,radial_range,metadata,selection
     sigma=None if quantile or r.sigma is None else np.asarray(r.sigma,dtype=float).copy()
     if sigma is not None:sigma[~valid]=np.nan
     uncertainty=uncertainty_description(method,model,quantile)
-    meta=dict(metadata,method_1d=method,method=list(ROBUST_BACKEND),api=api,selection=selection,
+    meta=dict(metadata,method_1d=method,method=actual_method(r,backend),api=api,selection=selection,
               comparison=reference,uncertainty_model=model,uncertainty=uncertainty,
               effective_radial_range=list(radial_range),invalid_bins=np.flatnonzero(~valid).tolist(),
               sparse_bins=int(np.count_nonzero(count<2)),retained_count=count.tolist(),

@@ -93,7 +93,7 @@ def atomic_write(path, writer, overwrite=False):
     finally:
         if os.path.exists(tmp): os.unlink(tmp)
 
-def write_curve(path, c, headerless=False, overwrite=False):
+def write_curve(path, c, headerless=False, overwrite=False, save_metadata=True):
     path = Path(path); ext = path.suffix.lower()
     # Omit undefined integration bins without changing the in-memory result or grid.
     valid = np.isfinite(c.x) & np.isfinite(c.intensity)
@@ -116,7 +116,10 @@ def write_curve(path, c, headerless=False, overwrite=False):
     if ext == '.chi' and not headerless:
         header = f"{path.stem}\n{c.metadata.get('unit','unknown')}\nIntensity\n{len(c.x)}"
     atomic_write(path, lambda p: np.savetxt(p,data,fmt='%.12g',header=header,comments=''),overwrite)
-    atomic_write(str(path)+'.json',lambda p:p.write_text(json.dumps(c.metadata,indent=2,default=str)),overwrite)
+    if save_metadata:
+        atomic_write(str(path)+'.json',lambda p:p.write_text(json.dumps(c.metadata,indent=2,default=str)),overwrite)
+    elif overwrite:
+        Path(str(path)+'.json').unlink(missing_ok=True)
     return int(omitted.size)
 
 def write_map(path, result, metadata, overwrite=False):

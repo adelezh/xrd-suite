@@ -19,7 +19,7 @@ def batch_plan(files, folder, units, one, two, extension, naming, settings=None)
     check_collisions([p[3] for p in plan]); return plan
 
 
-def run_batch(engine, settings, plan, policy, cancel, report):
+def run_batch(engine, settings, plan, policy, cancel, report, save_metadata=True):
     counts = dict(saved=0,skipped=0,failed=0)
     # One image and at most one result at a time; no batch-sized image cache.
     for index,(source,unit,dim,path) in enumerate(plan):
@@ -33,7 +33,7 @@ def run_batch(engine, settings, plan, policy, cancel, report):
             curves,map_result,meta = engine.integrate(read_image(source),s,source,dim=='1D',dim=='2D')
             if cancel.is_set(): break
             omitted=0
-            if dim=='1D': omitted=write_curve(target,curves[0],overwrite=policy=='Overwrite')
+            if dim=='1D': omitted=write_curve(target,curves[0],overwrite=policy=='Overwrite',save_metadata=save_metadata)
             else: write_map(target,map_result,meta,overwrite=policy=='Overwrite')
             counts['saved'] += 1; report(index+1,len(plan),f'Saved: {target.name}'+(f' ({omitted} undefined bins omitted)' if omitted else ''))
         except Exception as e:
@@ -62,7 +62,7 @@ def manipulation_plan(files,folder,operation,grouping,section,naming,prefix,suff
     return plan
 
 
-def run_manipulation(plan,operation,policy,scale,approximate,cancel,report):
+def run_manipulation(plan,operation,policy,scale,approximate,cancel,report,save_metadata=True):
     counts = dict(saved=0,skipped=0,failed=0)
     for i,(members,path) in enumerate(plan):
         if cancel.is_set(): break
@@ -70,13 +70,15 @@ def run_manipulation(plan,operation,policy,scale,approximate,cancel,report):
             target = resolve_output(path,policy)
             if target is None: counts['skipped']+=1; report(i+1,len(plan),f'Skipped: {path.name}'); continue
             overwrite = policy=='Overwrite'
+            omitted = 0
             if operation=='Copy / Rename':
                 atomic_write(target,lambda p:shutil.copyfile(members[0],p),overwrite)
                 side = Path(members[0]+'.json')
-                if side.exists(): atomic_write(str(target)+'.json',lambda p:shutil.copyfile(side,p),overwrite)
+                if save_metadata and side.exists(): atomic_write(str(target)+'.json',lambda p:shutil.copyfile(side,p),overwrite)
+                elif overwrite: Path(str(target)+'.json').unlink(missing_ok=True)
             elif operation=='For TOPAS':
                 c = scale_curve(read_curve(members[0]),scale,approximate)
-                write_curve(target,c,headerless=True,overwrite=overwrite)
+                omitted = write_curve(target,c,headerless=True,overwrite=overwrite,save_metadata=save_metadata)
             elif Path(members[0]).suffix.lower() in ('.tif','.tiff'):
                 total = None
                 for source in members:
@@ -90,7 +92,7 @@ def run_manipulation(plan,operation,policy,scale,approximate,cancel,report):
                 atomic_write(target,lambda p:TifImage(data=total).write(str(p)),overwrite)
             else:
                 c = combine_curves([read_curve(p) for p in members],operation=='Average')
-                write_curve(target,c,overwrite=overwrite)
+                omitted = write_curve(target,c,overwrite=overwrite,save_metadata=save_metadata)
             counts['saved']+=1; report(i+1,len(plan),f'Saved: {target.name}'+(f' ({omitted} undefined bins omitted)' if omitted else ''))
         except Exception as e:
             counts['failed']+=1; report(i+1,len(plan),f'Failed {path.name}: {e}')

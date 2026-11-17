@@ -22,6 +22,7 @@ class StableAzimuthalIntegrator(AzimuthalIntegrator):
 
 import numpy as np
 from .files import Curve, read_image
+from .splitting import integration_method, actual_method
 
 def sector_pixels(chi_degrees, start, end):
     width = (end-start) % 360
@@ -35,7 +36,7 @@ class Engine:
         self.ai.load(str(poni)); self.ai.setChiDiscAtPi()
         self.mask = read_image(mask) != 0 if mask else None
         self.variance_cache = {}
-        self.metadata = {'calibration':str(poni),'calibration_sha256':hashlib.sha256(Path(poni).read_bytes()).hexdigest(), 'mask':str(mask),'mask_sha256':hashlib.sha256(Path(mask).read_bytes()).hexdigest() if mask else None,'pyFAI_version':pyFAI.version,'mask_convention':'nonzero = excluded','azimuth_convention':'pyFAI chi, [-180,180), pixel centers, start inclusive/end exclusive','method':['no','histogram','cython'],'coordinate_backend':'NumPy unit equations (strided-coordinate safety)'}
+        self.metadata = {'calibration':str(poni),'calibration_sha256':hashlib.sha256(Path(poni).read_bytes()).hexdigest(), 'mask':str(mask),'mask_sha256':hashlib.sha256(Path(mask).read_bytes()).hexdigest() if mask else None,'pyFAI_version':pyFAI.version,'mask_convention':'nonzero = excluded','azimuth_convention':'pyFAI chi, [-180,180), pixel centers, start inclusive/end exclusive','coordinate_backend':'NumPy unit equations (strided-coordinate safety)'}
     def base_mask(self, image):
         mask = ~np.isfinite(image)
         for source in (self.mask, self.ai.detector.mask):
@@ -59,15 +60,16 @@ class Engine:
             variance = self.variance_cache.get(s.variance)
             if variance is None: variance = read_image(s.variance)
             if variance.shape != image.shape or not np.isfinite(variance).all() or (variance < 0).any(): raise ValueError('Variance must match the image and contain finite nonnegative variances.')
-        kw = dict(unit=s.unit,radial_range=s.radial_range,correctSolidAngle=s.solid_angle,polarization_factor=s.polarization,method=('no','histogram','cython'),variance=variance if s.error_model=='supplied' else None,error_model='poisson' if s.error_model=='poisson' else None)
+        kw = dict(unit=s.unit,radial_range=s.radial_range,correctSolidAngle=s.solid_angle,polarization_factor=s.polarization,variance=variance if s.error_model=='supplied' else None,error_model='poisson' if s.error_model=='poisson' else None)
         meta = dict(self.metadata,method_1d='average',api='integrate1d_ng',source=str(source),settings=asdict(s),unit=s.unit,wavelength_m=self.ai.wavelength,uncertainty='propagated supplied variance' if s.error_model=='supplied' else ('pyFAI Poisson model estimate; corrected intensity cannot recover true counting variance' if s.error_model=='poisson' else 'none'),dark_subtraction='none')
         curves = []
         if one and s.method_1d == 'average':
+            kw['method']=integration_method(s.pixel_splitting)
             r = self.ai.integrate1d_ng(image,s.radial_bins,mask=mask,**kw)
-            curves.append(Curve(r.radial,r.intensity,r.sigma,dict(meta,selection='sector' if s.sector else 'full',comparison=False,invalid_bins=np.flatnonzero(np.asarray(r.count)<=0).tolist())))
+            curves.append(Curve(r.radial,r.intensity,r.sigma,dict(meta,method=actual_method(r,kw['method']),selection='sector' if s.sector else 'full',comparison=False,invalid_bins=np.flatnonzero(np.asarray(r.count)<=0).tolist())))
             if s.sector and s.compare_full:
                 r = self.ai.integrate1d_ng(image,s.radial_bins,mask=base,**kw)
-                curves.append(Curve(r.radial,r.intensity,r.sigma,dict(meta,selection='full comparison',comparison=True,invalid_bins=np.flatnonzero(np.asarray(r.count)<=0).tolist())))
+                curves.append(Curve(r.radial,r.intensity,r.sigma,dict(meta,method=actual_method(r,kw['method']),selection='full comparison',comparison=True,invalid_bins=np.flatnonzero(np.asarray(r.count)<=0).tolist())))
         elif one:
             from .estimators import robust_curve
             if np.all(mask):raise ValueError('No valid pixels in the selected sector after masking.')
@@ -91,5 +93,7 @@ class Engine:
         # Map metadata records its actual ordinary estimator, not the selected 1D estimator.
         meta=dict(meta,method_1d='average',api='integrate2d_ng',settings=dict(meta['settings'],method_1d='average'))
         # 2D retains the full azimuth axis; excluded sector pixels remain empty.
+        if two:kw['method']=integration_method(s.pixel_splitting,2)
         map_result = self.ai.integrate2d_ng(image,s.radial_bins,s.azimuth_bins,mask=mask,azimuth_range=(-180,180),**kw) if two else None
+        if two:meta['method']=actual_method(map_result,kw['method'])
         return curves,map_result,meta

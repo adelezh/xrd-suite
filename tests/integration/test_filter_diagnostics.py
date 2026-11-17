@@ -89,7 +89,7 @@ def test_sigma_exact_iterative_flags_and_weighted_reproduction(synthetic,model,t
 @pytest.mark.parametrize('bounds',[(0,100),(25,75),(25.5,75.25),(50,50),(0,0),(100,100)])
 def test_percentile_bounds_weighted_reproduction(synthetic,bounds):
     engine,image = synthetic; image = image-100 # corrected negative intensities remain eligible
-    s = Settings(method_1d='percentile',radial_bins=19,percentile_low=bounds[0],percentile_high=bounds[1])
+    s = Settings(method_1d='percentile',pixel_splitting='no',radial_bins=19,percentile_low=bounds[0],percentile_high=bounds[1])
     curve = engine.integrate(image,s,two=False,diagnostics=True)[0][0]
     d = curve.diagnostic; assert d is not None, curve.metadata['filter_diagnostic']
     e = next(v.engine for k,v in engine.ai.engines.items() if k.algo.lower()=='csr')
@@ -121,7 +121,7 @@ def test_weighted_quantiles_ties_and_single_quantile():
 
 def test_ambiguous_backend_ties_disable_instead_of_inventing_mask(synthetic):
     engine,image=synthetic; image=np.ones(image.shape)
-    settings=Settings(method_1d='percentile',radial_bins=8,solid_angle=False,polarization=0)
+    settings=Settings(method_1d='percentile',pixel_splitting='no',radial_bins=8,solid_angle=False,polarization=0)
     # polarization_factor=0 still angle-dependent; disable using zero-angle geometry? Instead
     # cancel the exact normalization to make all corrected keys bitwise equal.
     engine.integrate(image,settings,two=False)
@@ -176,7 +176,7 @@ def test_unknown_version_and_budget_fail_closed(synthetic,monkeypatch):
 @pytest.mark.parametrize('sector',[False,True])
 def test_partial_percentile_ties_preserve_verified_bins(synthetic,bounds,sector):
     engine,image=synthetic;image=image.copy()
-    settings=Settings(method_1d='percentile',radial_bins=19,percentile_low=bounds[0],
+    settings=Settings(method_1d='percentile',pixel_splitting='no',radial_bins=19,percentile_low=bounds[0],
         percentile_high=bounds[1],sector=sector,start=150,end=-140,error_model='poisson')
     engine.integrate(image,settings,two=False)
     e=next(v.engine for k,v in engine.ai.engines.items() if k.algo.lower()=='csr')
@@ -237,7 +237,7 @@ def test_symmetric_example_keeps_partial_percentile_overlay(tmp_path,bins):
     folder=generate(tmp_path/'symmetric')
     engine=Engine(folder/'synthetic.poni',folder/'mask.npy')
     image=read_image(next((folder/'dark_sub').glob('*.tiff')))
-    s=Settings(method_1d='percentile',radial_bins=bins)
+    s=Settings(method_1d='percentile',pixel_splitting='no',radial_bins=bins)
     before=engine.integrate(image,s,two=False)[0][0]
     c=engine.integrate(image,s,two=False,diagnostics=True)[0][0]
     d=c.diagnostic;assert d is not None,c.metadata['filter_diagnostic']

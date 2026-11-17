@@ -63,7 +63,7 @@ def test_engine_mask_and_sector(engine,tmp_path):
     s=Settings(radial_bins=20,azimuth_bins=24,sector=True,start=170,end=-170,error_model='poisson')
     curves,m,meta=engine.integrate(image,s,'synthetic')
     expected=engine.mask | ~sector_pixels(engine.chi(image.shape),170,-170)
-    r=engine.ai.integrate1d_ng(image,20,mask=expected,unit='2th_deg',correctSolidAngle=True,polarization_factor=.99,error_model='poisson',method=('no','histogram','cython'))
+    r=engine.ai.integrate1d_ng(image,20,mask=expected,unit='2th_deg',correctSolidAngle=True,polarization_factor=.99,error_model='poisson',method=('bbox','csr','cython'))
     np.testing.assert_allclose(curves[0].intensity,r.intensity);np.testing.assert_allclose(curves[0].sigma,r.sigma)
     assert m.intensity.shape==(24,20)
     p=tmp_path/'map.npz';write_map(p,m,meta);d=np.load(p);np.testing.assert_equal(d['radial'],m.radial)
@@ -75,7 +75,7 @@ def test_supplied_sigma_semantics(engine,tmp_path):
     s=Settings(radial_bins=10,solid_angle=False,polarization=0,error_model='supplied',variance=str(p))
     c,_,_=engine.integrate(image,s,two=False)
     # sigma is standard error of normalized mean, not sqrt(final intensity).
-    r=engine.ai.integrate1d_ng(image,10,variance=np.full_like(image,25.),unit=s.unit,correctSolidAngle=False,polarization_factor=0,method=('no','histogram','cython'))
+    r=engine.ai.integrate1d_ng(image,10,variance=np.full_like(image,25.),unit=s.unit,correctSolidAngle=False,polarization_factor=0,method=('bbox','csr','cython'))
     np.testing.assert_allclose(c[0].sigma,np.sqrt(r.sum_variance)/r.sum_normalization)
     assert np.max(c[0].sigma)<10
 
@@ -101,13 +101,15 @@ def test_settings():
     for s in [Settings(radial_bins=0),Settings(radial_range=(3,2)),Settings(start=181,sector=True),Settings(polarization=float('nan'))]:
         with pytest.raises(ValueError):s.validate()
 
-def test_batch_writes_and_skip(engine,tmp_path):
+@pytest.mark.parametrize('save_metadata',[True,False])
+def test_batch_writes_and_skip(engine,tmp_path,save_metadata):
     from fabio.tifimage import TifImage
     source=tmp_path/NAME;TifImage(data=np.full((64,64),10.)).write(str(source))
     folder=tmp_path/'out';plan=batch_plan([source],folder,['2th_deg'],True,True,'.chi','Shorten standard')
     report=[];cancel=threading.Event()
-    counts=run_batch(engine,Settings(radial_bins=10,azimuth_bins=12),plan,'Skip',cancel,lambda *a:report.append(a))
+    counts=run_batch(engine,Settings(radial_bins=10,azimuth_bins=12),plan,'Skip',cancel,lambda *a:report.append(a),save_metadata=save_metadata)
     assert counts==dict(saved=2,skipped=0,failed=0,cancelled=False)
+    assert Path(str(plan[0][3])+'.json').exists()==save_metadata
     assert run_batch(engine,Settings(radial_bins=10),plan,'Skip',cancel,lambda *a:None)['skipped']==2
     assert len(read_curve(plan[0][3]).x)==10
 
@@ -120,6 +122,52 @@ def test_manipulation(tmp_path):
     plan=manipulation_plan([a],tmp_path/'topas','For TOPAS','All selected','','Keep original','','',False,'.xye')
     result=run_manipulation(plan,'For TOPAS','Skip',-2,False,threading.Event(),lambda *a:None)
     assert result['saved']==1;data=np.loadtxt(plan[0][1]);np.testing.assert_equal(data[:,2],2);np.testing.assert_equal(data[:,0],c.x)
+
+@pytest.mark.parametrize('save_metadata',[True,False])
+@pytest.mark.parametrize('operation,image',[
+    ('Copy / Rename',False),('For TOPAS',False),
+    ('Sum',False),('Average',False),('Sum',True),('Average',True)])
+def test_manipulation_reports_success(tmp_path,operation,image,save_metadata):
+    source=tmp_path/('input.tiff' if image else 'input.xy')
+    target=tmp_path/'out'/source.name
+    if image:
+        from fabio.tifimage import TifImage
+        TifImage(data=np.full((4,4),10.)).write(str(source))
+    else:
+        write_curve(source,Curve(np.arange(3.),np.array([3.,5.,7.])))
+    reports=[]
+    counts=run_manipulation([([str(source)],target)],operation,'Skip',1,False,
+                            threading.Event(),lambda *args:reports.append(args),save_metadata=save_metadata)
+    assert target.exists()
+    assert counts==dict(saved=1,skipped=0,failed=0,cancelled=False)
+    assert reports==[(1,1,f'Saved: {target.name}')]
+    assert Path(str(target)+'.json').exists()==(save_metadata and not image)
+
+
+@pytest.mark.parametrize('extension',['xy','chi','xye'])
+def test_optional_curve_metadata(tmp_path,extension):
+    curve=Curve(np.arange(3.),np.array([3.,5.,7.]),np.ones(3),{'unit':'2th_deg'})
+    original=tmp_path/f'original.{extension}';plain=tmp_path/f'plain.{extension}'
+    write_curve(original,curve)
+    write_curve(plain,curve,save_metadata=False)
+    assert not Path(str(plain)+'.json').exists()
+    np.testing.assert_array_equal(read_curve(original).intensity,read_curve(plain).intensity)
+    if extension=='xye':np.testing.assert_array_equal(read_curve(plain).sigma,curve.sigma)
+    write_curve(original,curve,overwrite=True,save_metadata=False)
+    assert not Path(str(original)+'.json').exists()
+
+
+def test_copy_without_metadata_removes_only_overwritten_sidecar(tmp_path):
+    source=tmp_path/'input.xy';target=tmp_path/'out.xy'
+    curve=Curve(np.arange(3.),np.ones(3),metadata={'unit':'2th_deg'})
+    write_curve(source,curve);write_curve(target,curve)
+    plan=[([str(source)],target)]
+    args=(plan,'Copy / Rename','Overwrite',1,False,threading.Event(),lambda *a:None)
+    assert run_manipulation(*args,save_metadata=False)['failed']==0
+    assert Path(str(source)+'.json').exists()
+    assert not Path(str(target)+'.json').exists()
+    assert source.read_bytes()==target.read_bytes()
+
 
 def test_frozen_variance(engine,tmp_path):
     p=tmp_path/'variance.npy';np.save(p,np.full((64,64),4.));s=Settings(radial_bins=10,error_model='supplied',variance=str(p));engine.freeze_variance(s)
